@@ -354,20 +354,9 @@
   .clickable:active { transform: scale(0.99); }
   .clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  /* Active-alert bands on hours/days (red = severe, yellow = moderate, dashed = both) */
-  .hour, .day { position: relative; }
-  .band-red::after, .band-yellow::after, .band-both::after {
-    content: ""; position: absolute; inset: 0;
-    border-radius: inherit; padding: 2px;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude;
-    pointer-events: none;
-  }
-  .band-red::after    { background: #ef4444; }
-  .band-yellow::after { background: #ead24a; }
-  .band-both::after   { background: repeating-linear-gradient(45deg, #ef4444 0 6px, #ead24a 6px 12px); }
-  .day.band-red, .day.band-yellow, .day.band-both { border-radius: 9px; }
+  /* Active-alert marker shown next to the condition icon (🚨 severe, ⚠️ moderate) */
+  .hour .i .amark { font-size: 0.6em; vertical-align: top; margin-left: 1px; cursor: help; }
+  .dc .amark:not(:empty) { font-size: 14px; margin-right: 4px; vertical-align: -1px; cursor: help; }
 
   /* Detail modal */
   .modal-backdrop {
@@ -841,7 +830,7 @@
         var pp=hourly.precipitation_probability?hourly.precipitation_probability[k]:null;
         var el=document.createElement("div"); el.className="hour";
         el.innerHTML='<div class="t">'+(k===start?"Now":fmtHour(d))+'</div>'+
-          '<div class="i">'+code[1]+'</div>'+
+          '<div class="i">'+code[1]+'<span class="amark"></span></div>'+
           '<div class="tm">'+round(hourly.temperature_2m[k])+'°</div>'+
           '<div class="pp">'+(pp!=null&&pp>0?"💧"+pp+"%":"")+'</div>';
         el.setAttribute("data-band-start", d.getTime());
@@ -849,7 +838,7 @@
         (function(idx){ onActivate(el, function(){ openHourModal(hourly, idx); }); })(k);
         scroll.appendChild(el);
       }
-      applyAlertBands();
+      setAlertMarks();
     }
 
     function renderDaily(daily){
@@ -860,7 +849,7 @@
         var row=document.createElement("div"); row.className="day";
         row.innerHTML='<div class="dn">'+dayName(daily.time[i],i)+'</div>'+
           '<div class="di">'+code[1]+'</div>'+
-          '<div class="dc">'+code[0]+(pp!=null&&pp>0?' · <span class="pp">💧'+pp+'%</span>':'')+'</div>'+
+          '<div class="dc"><span class="amark"></span>'+code[0]+(pp!=null&&pp>0?' · <span class="pp">💧'+pp+'%</span>':'')+'</div>'+
           '<div class="dt">'+round(daily.temperature_2m_max[i])+'° <span class="lo">'+round(daily.temperature_2m_min[i])+'°</span></div>';
         var ds = new Date(daily.time[i]+"T00:00").getTime();
         row.setAttribute("data-band-start", ds);
@@ -868,7 +857,7 @@
         (function(idx){ onActivate(row, function(){ openDayModal(daily, idx); }); })(i);
         list.appendChild(row);
       }
-      applyAlertBands();
+      setAlertMarks();
     }
 
     // ---------- Radar ----------
@@ -938,7 +927,7 @@
       var list = $("alerts-list"), count = $("alert-count");
       list.innerHTML = "";
       state.alertWindows = features.map(alertWindow);
-      applyAlertBands();
+      setAlertMarks();
       if(!features.length){
         count.classList.add("hidden");
         var empty = document.createElement("div");
@@ -1001,8 +990,8 @@
       if(isNaN(end)) end = Infinity;
       return { tier: alertTier(p.severity || "Unknown"), start: start, end: end };
     }
-    // Paint red/yellow/dashed borders on any hour/day card whose time span overlaps an alert.
-    function applyAlertBands(){
+    // Put an alert icon (🚨 severe, ⚠️ moderate) on any hour/day card whose span overlaps an alert.
+    function setAlertMarks(){
       var wins = state.alertWindows || [];
       var els = document.querySelectorAll("[data-band-start]");
       for(var j = 0; j < els.length; j++){
@@ -1013,10 +1002,16 @@
           var w = wins[i];
           if(w.start < ce && w.end > cs){ if(w.tier === "red") red = true; else yellow = true; }
         }
-        el.classList.remove("band-red", "band-yellow", "band-both");
-        if(red && yellow) el.classList.add("band-both");
-        else if(red) el.classList.add("band-red");
-        else if(yellow) el.classList.add("band-yellow");
+        var mark = el.querySelector(".amark");
+        if(!mark) continue;
+        if(red || yellow){
+          mark.textContent = red ? "🚨" : "⚠️";
+          mark.title = (red && yellow) ? "Severe & moderate alerts active"
+                     : (red ? "Severe alert active" : "Moderate alert active");
+        } else {
+          mark.textContent = "";
+          mark.removeAttribute("title");
+        }
       }
     }
 
