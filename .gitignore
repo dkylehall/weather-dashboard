@@ -5,3 +5,6 @@ node_modules/
 
 # Claude Code local settings
 .claude/
+
+# Stray build output (this app has no build step)
+dist/

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Double-click to serve the weather dashboard locally so geolocation works.
 cd "$(dirname "$0")"
-PORT=8000
+PORT=8080
 URL="http://localhost:$PORT"
 echo "Serving weather dashboard at $URL  (press Ctrl+C to stop)"
 ( sleep 1; open "$URL" ) >/dev/null 2>&1 &

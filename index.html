@@ -181,9 +181,9 @@
     grid-template-columns: minmax(300px, 1fr) minmax(0, 1.55fr);
     grid-template-rows: auto auto 1fr;
     grid-template-areas:
-      "current radar"
-      "hourly  radar"
-      "daily   radar";
+      "current side"
+      "hourly  side"
+      "daily   side";
     gap: 10px;
   }
   .card {
@@ -206,7 +206,11 @@
   #current-card { grid-area: current; }
   #hourly-card  { grid-area: hourly; }
   #daily-card   { grid-area: daily; display: flex; flex-direction: column; }
-  #radar-card   { grid-area: radar; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Right column: reduced radar on top, alerts below */
+  #side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  #radar-card   { flex: 1 1 auto; padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 140px; }
+  #alerts-card  { flex: 0 0 auto; max-height: 42%; display: flex; flex-direction: column; }
 
   /* Current */
   .current-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -294,6 +298,56 @@
     background: linear-gradient(90deg, #1a73e8, #34d399, #fbbf24, #ef4444, #d946ef);
   }
 
+  /* Alerts */
+  #alerts-card h2 { display: flex; align-items: center; gap: 8px; }
+  .alert-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 999px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0; color: #1a0e00; background: var(--warn);
+  }
+  .alerts-list {
+    display: flex; flex-direction: column; gap: 8px;
+    overflow-y: auto; min-height: 0; flex: 1 1 auto;
+    scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  }
+  .alerts-list::-webkit-scrollbar { width: 6px; }
+  .alerts-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+  .alert {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--muted);
+    border-radius: 11px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.025);
+  }
+  .alert-top { display: flex; align-items: center; gap: 8px; }
+  .alert-event { font-size: 13px; font-weight: 650; flex: 1 1 auto; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alert-sev {
+    flex: 0 0 auto; font-size: 9.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 2px 6px; border-radius: 999px;
+    color: #0b1020; background: var(--muted);
+  }
+  .alert-area { color: var(--muted); font-size: 11.5px; margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alert-time { color: var(--muted); font-size: 11px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .alerts-empty {
+    display: flex; align-items: center; gap: 9px;
+    color: var(--muted); font-size: 13px; padding: 6px 2px;
+  }
+  .alerts-empty .ico { font-size: 18px; }
+
+  /* Severity accents */
+  .alert.sev-extreme { border-left-color: #d946ef; }
+  .alert.sev-extreme .alert-sev { background: #d946ef; color: #fff; }
+  .alert.sev-severe  { border-left-color: #ef4444; }
+  .alert.sev-severe  .alert-sev { background: #ef4444; color: #fff; }
+  .alert.sev-moderate { border-left-color: var(--warn); }
+  .alert.sev-moderate .alert-sev { background: var(--warn); }
+  .alert.sev-minor   { border-left-color: #ead24a; }
+  .alert.sev-minor   .alert-sev { background: #ead24a; }
+
   /* Overlay */
   .status-overlay {
     position: fixed; inset: 0;
@@ -318,8 +372,11 @@
     .dashboard {
       grid-template-columns: 1fr;
       grid-template-rows: none;
-      grid-template-areas: "current" "hourly" "daily" "radar";
+      grid-template-areas: "current" "hourly" "daily" "side";
     }
+    #side { min-height: 0; }
+    #radar-card { flex: 0 0 auto; }
+    #alerts-card { max-height: none; }
     #map { height: 320px; }
     .loc h1 { max-width: 70vw; }
   }
@@ -397,16 +454,25 @@
         <div class="daily-list" id="daily-list"></div>
       </section>
 
-      <section class="card" id="radar-card">
-        <div class="radar-head">
-          <h2>Live Radar</h2>
-          <div class="radar-head-right">
-            <button class="tool map-style-btn" id="map-style" title="Toggle map style">☀️ Light</button>
-            <div class="radar-legend"><span>Light</span><span class="bar"></span><span>Heavy</span></div>
+      <aside id="side">
+        <section class="card" id="radar-card">
+          <div class="radar-head">
+            <h2>Live Radar</h2>
+            <div class="radar-head-right">
+              <button class="tool map-style-btn" id="map-style" title="Toggle map style">☀️ Light</button>
+              <div class="radar-legend"><span>Light</span><span class="bar"></span><span>Heavy</span></div>
+            </div>
           </div>
-        </div>
-        <div id="map"></div>
-      </section>
+          <div id="map"></div>
+        </section>
+
+        <section class="card" id="alerts-card">
+          <h2>Weather Alerts <span class="alert-count hidden" id="alert-count">0</span></h2>
+          <div class="alerts-list" id="alerts-list">
+            <div class="alerts-empty"><span class="ico">✓</span> No active alerts.</div>
+          </div>
+        </section>
+      </aside>
     </main>
   </div>
 
@@ -643,8 +709,9 @@
       updateSaveBtn(); renderFavBar();
       fetchWeather();
       initOrMoveMap();
+      loadAlerts();
       if(state.refreshTimer) clearInterval(state.refreshTimer);
-      state.refreshTimer=setInterval(function(){ fetchWeather(); loadRadar(); }, REFRESH_MS);
+      state.refreshTimer=setInterval(function(){ fetchWeather(); loadRadar(); loadAlerts(); }, REFRESH_MS);
     }
 
     function fetchWeather(){
@@ -766,8 +833,78 @@
         }).catch(function(){});
     }
 
+    // ---------- Weather alerts (US National Weather Service) ----------
+    var SEV_RANK = { Extreme:4, Severe:3, Moderate:2, Minor:1, Unknown:0 };
+    var alertsReq = 0; // guard against out-of-order responses when switching locations
+
+    function loadAlerts(){
+      var reqId = ++alertsReq;
+      var lat = state.lat, lon = state.lon;
+      fetch("https://api.weather.gov/alerts/active?point="+lat.toFixed(4)+","+lon.toFixed(4),
+        { headers: { "Accept": "application/geo+json" } })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(reqId !== alertsReq) return;               // a newer request superseded this one
+          renderAlerts((j && j.features) ? j.features : []);
+        })
+        .catch(function(){ if(reqId === alertsReq) renderAlerts([]); });
+    }
+
+    function renderAlerts(features){
+      var list = $("alerts-list"), count = $("alert-count");
+      list.innerHTML = "";
+      if(!features.length){
+        count.classList.add("hidden");
+        var empty = document.createElement("div");
+        empty.className = "alerts-empty";
+        empty.innerHTML = '<span class="ico">✓</span> No active alerts.';
+        list.appendChild(empty);
+        return;
+      }
+      features.sort(function(a,b){
+        return (SEV_RANK[b.properties.severity]||0) - (SEV_RANK[a.properties.severity]||0);
+      });
+      count.textContent = features.length;
+      count.classList.remove("hidden");
+      features.forEach(function(f){
+        var p = f.properties || {};
+        var sev = p.severity || "Unknown";
+        var el = document.createElement("div");
+        el.className = "alert sev-" + sev.toLowerCase();
+        if(p.headline || p.description){
+          el.title = p.headline || p.description;      // full text on hover
+        }
+        el.innerHTML =
+          '<div class="alert-top">'+
+            '<span class="alert-event">'+esc(p.event||"Alert")+'</span>'+
+            '<span class="alert-sev">'+esc(sev)+'</span>'+
+          '</div>'+
+          (p.areaDesc ? '<div class="alert-area">'+esc(p.areaDesc)+'</div>' : '')+
+          '<div class="alert-time">'+alertTime(p)+'</div>';
+        list.appendChild(el);
+      });
+    }
+
+    function alertTime(p){
+      var end = p.ends || p.expires;
+      if(!end) return "In effect";
+      var d = new Date(end);
+      if(isNaN(d.getTime())) return "In effect";
+      var now = Date.now(), sameDay = d.toDateString() === new Date(now).toDateString();
+      var when = sameDay
+        ? d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})
+        : d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"});
+      return "Until " + when;
+    }
+
+    function esc(s){
+      return String(s).replace(/[&<>"]/g, function(c){
+        return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+      });
+    }
+
     // ---------- Controls ----------
-    $("refresh").addEventListener("click",function(){ fetchWeather(); loadRadar(); });
+    $("refresh").addEventListener("click",function(){ fetchWeather(); loadRadar(); loadAlerts(); });
     $("map-style").addEventListener("click",function(){ setBaseLayer(mapStyle==="dark"?"light":"dark"); });
     $("fullscreen").addEventListener("click",function(){
       if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
