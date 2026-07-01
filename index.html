@@ -564,6 +564,11 @@
     })();
     // Cap zoom so base tiles stay sharp; radar upscales beyond its native zoom (below).
     var MAP_MAX_ZOOM = 18;
+    // RainViewer only serves real radar tiles through z7; past that it returns a
+    // "Zoom Level Not Supported" placeholder PNG as a normal 200 (so errorTileUrl
+    // can't catch it). Cap the radar at z7 so Leaflet upscales the real tile.
+    var RADAR_NATIVE_MAX = 7;
+    var BLANK_TILE = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
     // ---------- WMO codes ----------
     var WMO = {
@@ -901,8 +906,8 @@
           var host=j.host||"https://tilecache.rainviewer.com";
           var url=host+latest.path+"/256/{z}/{x}/{y}/4/1_1.png";
           if(radarLayer) map.removeLayer(radarLayer);
-          // RainViewer radar tiles only exist at low zoom; upscale past 12 instead of 404-ing.
-          radarLayer=L.tileLayer(url,{opacity:0.6,maxZoom:MAP_MAX_ZOOM,maxNativeZoom:12}).addTo(map);
+          // Upscale past z7 instead of fetching RainViewer's "not supported" placeholder.
+          radarLayer=L.tileLayer(url,{opacity:0.6,maxZoom:MAP_MAX_ZOOM,maxNativeZoom:RADAR_NATIVE_MAX,errorTileUrl:BLANK_TILE}).addTo(map);
         }).catch(function(){});
     }
 
