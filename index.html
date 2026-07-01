@@ -354,9 +354,19 @@
   .clickable:active { transform: scale(0.99); }
   .clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  /* Active-alert marker shown next to the condition icon (🚨 severe, ⚠️ moderate) */
-  .hour .i .amark { font-size: 0.6em; vertical-align: top; margin-left: 1px; cursor: help; }
-  .dc .amark:not(:empty) { font-size: 14px; margin-right: 4px; vertical-align: -1px; cursor: help; }
+  /* Clickable alert chip(s) shown inside an hour/day modal when alerts overlap it */
+  .m-alert-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .m-alert-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--card); border: 1px solid var(--line);
+    border-left-width: 3px; border-radius: 10px;
+    padding: 7px 11px; font-size: 13px; color: var(--text);
+    cursor: pointer; text-align: left;
+  }
+  .m-alert-chip:hover { border-color: var(--accent); background: var(--card-2); }
+  .m-alert-chip .ico { font-size: 15px; line-height: 1; }
+  .m-alert-chip.sev-red    { border-left-color: #ef4444; }
+  .m-alert-chip.sev-yellow { border-left-color: #ead24a; }
 
   /* Detail modal */
   .modal-backdrop {
@@ -835,15 +845,12 @@
         var pp=hourly.precipitation_probability?hourly.precipitation_probability[k]:null;
         var el=document.createElement("div"); el.className="hour";
         el.innerHTML='<div class="t">'+(k===start?"Now":fmtHour(d))+'</div>'+
-          '<div class="i">'+code[1]+'<span class="amark"></span></div>'+
+          '<div class="i">'+code[1]+'</div>'+
           '<div class="tm">'+round(hourly.temperature_2m[k])+'°</div>'+
           '<div class="pp">'+(pp!=null&&pp>0?"💧"+pp+"%":"")+'</div>';
-        el.setAttribute("data-band-start", d.getTime());
-        el.setAttribute("data-band-end", d.getTime() + 3600000);
         (function(idx){ onActivate(el, function(){ openHourModal(hourly, idx); }); })(k);
         scroll.appendChild(el);
       }
-      setAlertMarks();
     }
 
     function renderDaily(daily){
@@ -854,15 +861,11 @@
         var row=document.createElement("div"); row.className="day";
         row.innerHTML='<div class="dn">'+dayName(daily.time[i],i)+'</div>'+
           '<div class="di">'+code[1]+'</div>'+
-          '<div class="dc"><span class="amark"></span>'+code[0]+(pp!=null&&pp>0?' · <span class="pp">💧'+pp+'%</span>':'')+'</div>'+
+          '<div class="dc">'+code[0]+(pp!=null&&pp>0?' · <span class="pp">💧'+pp+'%</span>':'')+'</div>'+
           '<div class="dt">'+round(daily.temperature_2m_max[i])+'° <span class="lo">'+round(daily.temperature_2m_min[i])+'°</span></div>';
-        var ds = new Date(daily.time[i]+"T00:00").getTime();
-        row.setAttribute("data-band-start", ds);
-        row.setAttribute("data-band-end", ds + 86400000);
         (function(idx){ onActivate(row, function(){ openDayModal(daily, idx); }); })(i);
         list.appendChild(row);
       }
-      setAlertMarks();
     }
 
     // ---------- Radar ----------
@@ -932,7 +935,6 @@
       var list = $("alerts-list"), count = $("alert-count");
       list.innerHTML = "";
       state.alertWindows = features.map(alertWindow);
-      setAlertMarks();
       if(!features.length){
         count.classList.add("hidden");
         var empty = document.createElement("div");
@@ -993,31 +995,31 @@
       var end = e ? new Date(e).getTime() : Infinity;
       if(isNaN(start)) start = -Infinity;
       if(isNaN(end)) end = Infinity;
-      return { tier: alertTier(p.severity || "Unknown"), start: start, end: end };
+      return { tier: alertTier(p.severity || "Unknown"), start: start, end: end, feature: f };
     }
-    // Put an alert icon (🚨 severe, ⚠️ moderate) on any hour/day card whose span overlaps an alert.
-    function setAlertMarks(){
-      var wins = state.alertWindows || [];
-      var els = document.querySelectorAll("[data-band-start]");
-      for(var j = 0; j < els.length; j++){
-        var el = els[j];
-        var cs = +el.getAttribute("data-band-start"), ce = +el.getAttribute("data-band-end");
-        var red = false, yellow = false;
-        for(var i = 0; i < wins.length; i++){
-          var w = wins[i];
-          if(w.start < ce && w.end > cs){ if(w.tier === "red") red = true; else yellow = true; }
-        }
-        var mark = el.querySelector(".amark");
-        if(!mark) continue;
-        if(red || yellow){
-          mark.textContent = red ? "🚨" : "⚠️";
-          mark.title = (red && yellow) ? "Severe & moderate alerts active"
-                     : (red ? "Severe alert active" : "Moderate alert active");
-        } else {
-          mark.textContent = "";
-          mark.removeAttribute("title");
-        }
-      }
+    // Prepend a clickable alert chip to the open modal for each alert overlapping the
+    // given time span (🚨 severe, ⚠️ moderate). Clicking a chip opens its alert modal.
+    function addModalAlerts(cs, ce){
+      var hits = (state.alertWindows || []).filter(function(w){ return w.start < ce && w.end > cs; });
+      if(!hits.length) return;
+      hits.sort(function(a, b){ return (b.tier === "red") - (a.tier === "red"); });
+      var sec = document.createElement("div");
+      sec.className = "m-section";
+      var h4 = document.createElement("h4"); h4.textContent = "Active alerts"; sec.appendChild(h4);
+      var rowEl = document.createElement("div"); rowEl.className = "m-alert-row";
+      hits.forEach(function(w){
+        var p = w.feature.properties || {};
+        var chip = document.createElement("button");
+        chip.className = "m-alert-chip " + (w.tier === "red" ? "sev-red" : "sev-yellow");
+        chip.innerHTML = '<span class="ico">' + (w.tier === "red" ? "🚨" : "⚠️") +
+          '</span><span class="lbl">' + esc(p.event || "Alert") + "</span>";
+        chip.title = "View alert details";
+        chip.addEventListener("click", function(){ openAlertModal(w.feature); });
+        rowEl.appendChild(chip);
+      });
+      sec.appendChild(rowEl);
+      var body = $("modal-body");
+      body.insertBefore(sec, body.firstChild);
     }
 
     // ---------- Detail modal (hour / day / alert) ----------
@@ -1077,6 +1079,8 @@
         cell("Cloud cover", round(h.cloud_cover[i])+' <small>%</small>')+
       '</div>';
       openModal(code[1], fmtHourLabel(h.time[i]), code[0], body);
+      var hs = new Date(h.time[i]).getTime();
+      addModalAlerts(hs, hs + 3600000);
     }
 
     function openDayModal(dl, i){
@@ -1096,6 +1100,8 @@
         cell("Sunset", fmtClockTime(dl.sunset[i]))+
       '</div>';
       openModal(code[1], fmtDayLong(dl.time[i]), code[0], body);
+      var ds = new Date(dl.time[i]+"T00:00").getTime();
+      addModalAlerts(ds, ds + 86400000);
     }
 
     function alertIcon(sev){
