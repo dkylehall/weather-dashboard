@@ -372,11 +372,12 @@
   /* Red notification dot on any hour/day that overlaps an active alert */
   .hour, .day { position: relative; }
   .hour.has-alert::after, .day.has-alert::after {
-    content: ""; position: absolute; top: 6px; right: 6px;
+    content: ""; position: absolute; top: 5px; right: 4px;
     width: 8px; height: 8px; border-radius: 50%;
     background: #ef4444; border: 2px solid var(--card-2);
   }
-  .day.has-alert::after { top: 8px; right: 8px; }
+  /* Days: sit above the high/low temp (which starts ~12px down) so it doesn't overlap. */
+  .day.has-alert::after { top: 2px; right: 8px; }
 
   /* Detail modal */
   .modal-backdrop {
