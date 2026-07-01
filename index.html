@@ -367,6 +367,16 @@
   .m-alert-chip .ico { font-size: 15px; line-height: 1; }
   .m-alert-chip.sev-red    { border-left-color: #ef4444; }
   .m-alert-chip.sev-yellow { border-left-color: #ead24a; }
+  .m-alerts { margin-bottom: 8px; } /* gap between chips and the detail grid */
+
+  /* Red notification dot on any hour/day that overlaps an active alert */
+  .hour, .day { position: relative; }
+  .hour.has-alert::after, .day.has-alert::after {
+    content: ""; position: absolute; top: 6px; right: 6px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ef4444; border: 2px solid var(--card-2);
+  }
+  .day.has-alert::after { top: 8px; right: 8px; }
 
   /* Detail modal */
   .modal-backdrop {
@@ -848,9 +858,12 @@
           '<div class="i">'+code[1]+'</div>'+
           '<div class="tm">'+round(hourly.temperature_2m[k])+'°</div>'+
           '<div class="pp">'+(pp!=null&&pp>0?"💧"+pp+"%":"")+'</div>';
+        el.setAttribute("data-alert-start", d.getTime());
+        el.setAttribute("data-alert-end", d.getTime() + 3600000);
         (function(idx){ onActivate(el, function(){ openHourModal(hourly, idx); }); })(k);
         scroll.appendChild(el);
       }
+      setAlertDots();
     }
 
     function renderDaily(daily){
@@ -863,9 +876,13 @@
           '<div class="di">'+code[1]+'</div>'+
           '<div class="dc">'+code[0]+(pp!=null&&pp>0?' · <span class="pp">💧'+pp+'%</span>':'')+'</div>'+
           '<div class="dt">'+round(daily.temperature_2m_max[i])+'° <span class="lo">'+round(daily.temperature_2m_min[i])+'°</span></div>';
+        var ds = new Date(daily.time[i]+"T00:00").getTime();
+        row.setAttribute("data-alert-start", ds);
+        row.setAttribute("data-alert-end", ds + 86400000);
         (function(idx){ onActivate(row, function(){ openDayModal(daily, idx); }); })(i);
         list.appendChild(row);
       }
+      setAlertDots();
     }
 
     // ---------- Radar ----------
@@ -935,6 +952,7 @@
       var list = $("alerts-list"), count = $("alert-count");
       list.innerHTML = "";
       state.alertWindows = features.map(alertWindow);
+      setAlertDots();
       if(!features.length){
         count.classList.add("hidden");
         var empty = document.createElement("div");
@@ -1004,7 +1022,7 @@
       if(!hits.length) return;
       hits.sort(function(a, b){ return (b.tier === "red") - (a.tier === "red"); });
       var sec = document.createElement("div");
-      sec.className = "m-section";
+      sec.className = "m-section m-alerts";
       var h4 = document.createElement("h4"); h4.textContent = "Active alerts"; sec.appendChild(h4);
       var rowEl = document.createElement("div"); rowEl.className = "m-alert-row";
       hits.forEach(function(w){
@@ -1020,6 +1038,21 @@
       sec.appendChild(rowEl);
       var body = $("modal-body");
       body.insertBefore(sec, body.firstChild);
+    }
+    // Toggle a red notification dot on any hour/day card whose span overlaps an alert.
+    function setAlertDots(){
+      var wins = state.alertWindows || [];
+      var els = document.querySelectorAll("[data-alert-start]");
+      for(var j = 0; j < els.length; j++){
+        var el = els[j];
+        var cs = +el.getAttribute("data-alert-start"), ce = +el.getAttribute("data-alert-end");
+        var hit = false;
+        for(var i = 0; i < wins.length; i++){
+          var w = wins[i];
+          if(w.start < ce && w.end > cs){ hit = true; break; }
+        }
+        el.classList.toggle("has-alert", hit);
+      }
     }
 
     // ---------- Detail modal (hour / day / alert) ----------
