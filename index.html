@@ -348,6 +348,50 @@
   .alert.sev-minor   { border-left-color: #ead24a; }
   .alert.sev-minor   .alert-sev { background: #ead24a; }
 
+  /* Clickable list items (hours, days, alerts) */
+  .clickable { cursor: pointer; transition: background 0.15s, transform 0.05s; }
+  .clickable:hover { background: rgba(255, 255, 255, 0.06); }
+  .clickable:active { transform: scale(0.99); }
+  .clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Detail modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 1500;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(5, 8, 18, 0.62); padding: 20px;
+  }
+  .modal {
+    background: linear-gradient(180deg, var(--card), var(--card-2));
+    border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    width: min(460px, 92vw); max-height: 82vh; overflow-y: auto;
+    padding: 18px 20px 20px;
+    scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  }
+  .modal-head { display: flex; align-items: flex-start; gap: 12px; }
+  .modal-head .m-icon { font-size: 38px; line-height: 1; flex: 0 0 auto; }
+  .modal-title { flex: 1 1 auto; min-width: 0; }
+  .modal-title h3 { margin: 0; font-size: 18px; font-weight: 650; }
+  .modal-title .m-sub { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .modal-close {
+    flex: 0 0 auto; width: 30px; height: 30px;
+    background: var(--card); border: 1px solid var(--line); color: var(--text);
+    border-radius: 9px; cursor: pointer; font-size: 17px; line-height: 1;
+  }
+  .modal-close:hover { border-color: var(--accent); }
+  #modal-body { margin-top: 14px; }
+  .m-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .m-cell {
+    background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line);
+    border-radius: 11px; padding: 9px 11px;
+  }
+  .m-cell .k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .m-cell .v { font-size: 16px; font-weight: 650; margin-top: 3px; }
+  .m-cell .v small { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  .m-section { margin-top: 14px; }
+  .m-section h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .m-text { font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+
   /* Overlay */
   .status-overlay {
     position: fixed; inset: 0;
@@ -474,6 +518,21 @@
         </section>
       </aside>
     </main>
+  </div>
+
+  <!-- Detail modal (hour / day / alert) -->
+  <div class="modal-backdrop hidden" id="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-head">
+        <div class="m-icon" id="modal-icon"></div>
+        <div class="modal-title">
+          <h3 id="modal-title"></h3>
+          <div class="m-sub" id="modal-sub"></div>
+        </div>
+        <button class="modal-close" id="modal-close" aria-label="Close" title="Close">×</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -719,9 +778,10 @@
         "?latitude="+state.lat+"&longitude="+state.lon+
         "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,"+
           "wind_speed_10m,wind_direction_10m,surface_pressure"+
-        "&hourly=temperature_2m,weather_code,precipitation_probability,uv_index"+
+        "&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,"+
+          "precipitation_probability,precipitation,wind_speed_10m,wind_direction_10m,cloud_cover,uv_index"+
         "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,"+
-          "uv_index_max,precipitation_probability_max"+
+          "uv_index_max,precipitation_probability_max,precipitation_sum,wind_speed_10m_max"+
         "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch"+
         "&timezone=auto&forecast_days=7";
       fetch(url).then(function(r){return r.json();}).then(renderWeather)
@@ -769,6 +829,7 @@
           '<div class="i">'+code[1]+'</div>'+
           '<div class="tm">'+round(hourly.temperature_2m[k])+'°</div>'+
           '<div class="pp">'+(pp!=null&&pp>0?"💧"+pp+"%":"")+'</div>';
+        (function(idx){ onActivate(el, function(){ openHourModal(hourly, idx); }); })(k);
         scroll.appendChild(el);
       }
     }
@@ -783,6 +844,7 @@
           '<div class="di">'+code[1]+'</div>'+
           '<div class="dc">'+code[0]+(pp!=null&&pp>0?' · <span class="pp">💧'+pp+'%</span>':'')+'</div>'+
           '<div class="dt">'+round(daily.temperature_2m_max[i])+'° <span class="lo">'+round(daily.temperature_2m_min[i])+'°</span></div>';
+        (function(idx){ onActivate(row, function(){ openDayModal(daily, idx); }); })(i);
         list.appendChild(row);
       }
     }
@@ -881,6 +943,7 @@
           '</div>'+
           (p.areaDesc ? '<div class="alert-area">'+esc(p.areaDesc)+'</div>' : '')+
           '<div class="alert-time">'+alertTime(p)+'</div>';
+        onActivate(el, (function(feat){ return function(){ openAlertModal(feat); }; })(f));
         list.appendChild(el);
       });
     }
@@ -902,6 +965,113 @@
         return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
       });
     }
+
+    // ---------- Detail modal (hour / day / alert) ----------
+    function onActivate(el, fn){
+      el.classList.add("clickable");
+      el.tabIndex = 0;
+      el.setAttribute("role", "button");
+      el.addEventListener("click", fn);
+      el.addEventListener("keydown", function(e){
+        if(e.key === "Enter" || e.key === " "){ e.preventDefault(); fn(e); }
+      });
+    }
+    function cell(k, v){
+      return '<div class="m-cell"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div></div>';
+    }
+    function section(title, text){
+      if(!text) return "";
+      return '<div class="m-section"><h4>'+esc(title)+'</h4><div class="m-text">'+esc(text)+'</div></div>';
+    }
+    function openModal(icon, title, sub, bodyHtml){
+      $("modal-icon").textContent = icon || "";
+      $("modal-title").textContent = title || "";
+      $("modal-sub").textContent = sub || "";
+      $("modal-body").innerHTML = bodyHtml || "";
+      $("modal").classList.remove("hidden");
+      $("modal-close").focus();
+    }
+    function closeModal(){ $("modal").classList.add("hidden"); }
+
+    function fmtHourLabel(iso){
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, {weekday:"short"}) + " " + fmtHour(d);
+    }
+    function fmtDayLong(iso){
+      return new Date(iso+"T00:00").toLocaleDateString(undefined, {weekday:"long", month:"short", day:"numeric"});
+    }
+    function fmtDateTime(iso){
+      if(!iso) return "";
+      var d = new Date(iso);
+      if(isNaN(d.getTime())) return "";
+      return d.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
+    }
+
+    function openHourModal(h, i){
+      var code = wmo(h.weather_code[i]);
+      var pp = h.precipitation_probability ? h.precipitation_probability[i] : null;
+      var precip = h.precipitation ? h.precipitation[i] : null;
+      var uv = h.uv_index ? h.uv_index[i] : null;
+      var body = '<div class="m-grid">'+
+        cell("Temp", round(h.temperature_2m[i])+"°")+
+        cell("Feels like", round(h.apparent_temperature[i])+"°")+
+        cell("Precip chance", (pp!=null?pp:0)+' <small>%</small>')+
+        cell("Precip amount", (precip!=null?precip.toFixed(2):"0.00")+' <small>in</small>')+
+        cell("Humidity", round(h.relative_humidity_2m[i])+' <small>%</small>')+
+        cell("Wind", round(h.wind_speed_10m[i])+' <small>mph '+windDir(h.wind_direction_10m[i])+'</small>')+
+        cell("UV index", (uv!=null?round(uv):"—")+' <small>'+uvLabel(uv)+'</small>')+
+        cell("Cloud cover", round(h.cloud_cover[i])+' <small>%</small>')+
+      '</div>';
+      openModal(code[1], fmtHourLabel(h.time[i]), code[0], body);
+    }
+
+    function openDayModal(dl, i){
+      var code = wmo(dl.weather_code[i]);
+      var pp = dl.precipitation_probability_max ? dl.precipitation_probability_max[i] : null;
+      var psum = dl.precipitation_sum ? dl.precipitation_sum[i] : null;
+      var uv = dl.uv_index_max ? dl.uv_index_max[i] : null;
+      var wind = dl.wind_speed_10m_max ? dl.wind_speed_10m_max[i] : null;
+      var body = '<div class="m-grid">'+
+        cell("High", round(dl.temperature_2m_max[i])+"°")+
+        cell("Low", round(dl.temperature_2m_min[i])+"°")+
+        cell("Precip chance", (pp!=null?pp:0)+' <small>%</small>')+
+        cell("Precip amount", (psum!=null?psum.toFixed(2):"0.00")+' <small>in</small>')+
+        cell("UV index", (uv!=null?round(uv):"—")+' <small>'+uvLabel(uv)+'</small>')+
+        cell("Max wind", (wind!=null?round(wind):"—")+' <small>mph</small>')+
+        cell("Sunrise", fmtClockTime(dl.sunrise[i]))+
+        cell("Sunset", fmtClockTime(dl.sunset[i]))+
+      '</div>';
+      openModal(code[1], fmtDayLong(dl.time[i]), code[0], body);
+    }
+
+    function alertIcon(sev){
+      if(sev === "Extreme" || sev === "Severe") return "🚨";
+      if(sev === "Moderate") return "⚠️";
+      if(sev === "Minor") return "🔔";
+      return "ℹ️";
+    }
+    function openAlertModal(f){
+      var p = f.properties || {};
+      var sev = p.severity || "Unknown";
+      var end = p.ends || p.expires;
+      var effLine = (p.effective ? ("From " + fmtDateTime(p.effective)) : "") +
+                    (end ? ("   ·   Until " + fmtDateTime(end)) : "");
+      var body = "";
+      if(effLine.trim()) body += section("In effect", effLine.trim());
+      if(p.areaDesc) body += section("Area", p.areaDesc);
+      if(p.headline && p.headline !== p.event) body += section("Summary", p.headline);
+      if(p.description) body += section("Details", p.description);
+      if(p.instruction) body += section("What to do", p.instruction);
+      if(p.senderName) body += section("Issued by", p.senderName);
+      var subBits = [sev, p.urgency, p.certainty].filter(function(x){ return x && x !== "Unknown"; });
+      openModal(alertIcon(sev), p.event || "Weather alert", subBits.join(" · "), body);
+    }
+
+    $("modal-close").addEventListener("click", closeModal);
+    $("modal").addEventListener("click", function(e){ if(e.target === $("modal")) closeModal(); });
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape" && !$("modal").classList.contains("hidden")) closeModal();
+    });
 
     // ---------- Controls ----------
     $("refresh").addEventListener("click",function(){ fetchWeather(); loadRadar(); loadAlerts(); });
