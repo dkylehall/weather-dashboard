@@ -372,15 +372,14 @@
   /* Red notification dot on any hour/day that overlaps an active alert */
   .hour { position: relative; }
   .hour.has-alert::after {
-    content: ""; position: absolute; top: 5px; right: 4px;
+    content: ""; position: absolute; top: 5px; right: 3px;
     width: 8px; height: 8px; border-radius: 50%;
     background: #ef4444; border: 2px solid var(--card-2);
   }
-  /* Days: the temp fills the right edge, so anchor the dot just left of it,
-     vertically centered — clear of the digits at any temp width. */
-  .day .dt { position: relative; }
-  .day.has-alert .dt::before {
-    content: ""; position: absolute; top: 50%; left: -14px; transform: translateY(-50%);
+  /* Days: badge the day name in the left column at its top-right, like the hours. */
+  .day .dn { position: relative; justify-self: start; }
+  .day.has-alert .dn::after {
+    content: ""; position: absolute; top: -3px; left: calc(100% + 3px);
     width: 8px; height: 8px; border-radius: 50%;
     background: #ef4444; border: 2px solid var(--card-2);
   }
