@@ -370,14 +370,20 @@
   .m-alerts { margin-bottom: 8px; } /* gap between chips and the detail grid */
 
   /* Red notification dot on any hour/day that overlaps an active alert */
-  .hour, .day { position: relative; }
-  .hour.has-alert::after, .day.has-alert::after {
+  .hour { position: relative; }
+  .hour.has-alert::after {
     content: ""; position: absolute; top: 5px; right: 4px;
     width: 8px; height: 8px; border-radius: 50%;
     background: #ef4444; border: 2px solid var(--card-2);
   }
-  /* Days: sit above the high/low temp (which starts ~12px down) so it doesn't overlap. */
-  .day.has-alert::after { top: 2px; right: 8px; }
+  /* Days: the temp fills the right edge, so anchor the dot just left of it,
+     vertically centered — clear of the digits at any temp width. */
+  .day .dt { position: relative; }
+  .day.has-alert .dt::before {
+    content: ""; position: absolute; top: 50%; left: -14px; transform: translateY(-50%);
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ef4444; border: 2px solid var(--card-2);
+  }
 
   /* Detail modal */
   .modal-backdrop {
