@@ -193,6 +193,7 @@
     box-shadow: var(--shadow);
     padding: 14px 16px;
     min-height: 0;
+    min-width: 0;   /* let cards shrink to their grid cell so inner scrollers clip */
   }
   .card h2 {
     margin: 0 0 10px;
@@ -425,6 +426,23 @@
   .m-section h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
   .m-text { font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
 
+  /* Hourly strip inside the day modal */
+  .m-hourly {
+    display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+    scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  }
+  .m-hourly::-webkit-scrollbar { height: 6px; }
+  .m-hourly::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+  .mh {
+    flex: 0 0 auto; width: 50px; text-align: center;
+    background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line);
+    border-radius: 9px; padding: 6px 3px;
+  }
+  .mh .t { font-size: 10px; color: var(--muted); }
+  .mh .i { font-size: 17px; margin: 2px 0; }
+  .mh .tm { font-size: 12.5px; font-weight: 650; }
+  .mh .pp { font-size: 9.5px; color: var(--accent); min-height: 12px; }
+
   /* Overlay */
   .status-overlay {
     position: fixed; inset: 0;
@@ -447,7 +465,7 @@
     body { overflow: auto; }
     .app { height: auto; min-height: 100vh; }
     .dashboard {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       grid-template-rows: none;
       grid-template-areas: "current" "hourly" "daily" "side";
     }
@@ -840,6 +858,7 @@
     }
 
     function renderWeather(d){
+      state.weather=d;
       var cur=d.current, daily=d.daily, hourly=d.hourly;
       var c=wmo(cur.weather_code);
       $("cur-icon").textContent=c[1];
@@ -1214,10 +1233,30 @@
         cell("Max wind", (wind!=null?round(wind):"—")+' <small>mph</small>')+
         cell("Sunrise", fmtClockTime(dl.sunrise[i]))+
         cell("Sunset", fmtClockTime(dl.sunset[i]))+
-      '</div>';
+      '</div>' + dayHourlyHtml(dl.time[i]);
       openModal(code[1], fmtDayLong(dl.time[i]), code[0], body);
       var ds = new Date(dl.time[i]+"T00:00").getTime();
       addModalAlerts(ds, ds + 86400000);
+    }
+    // Hourly strip for a given calendar day (YYYY-MM-DD), pulled from the stored forecast.
+    function dayHourlyHtml(dateStr){
+      var h = state.weather && state.weather.hourly;
+      if(!h || !h.time) return "";
+      var cells = "";
+      for(var k = 0; k < h.time.length; k++){
+        if(h.time[k].slice(0, 10) !== dateStr) continue;
+        var d = new Date(h.time[k]);
+        var code = wmo(h.weather_code[k]);
+        var pp = h.precipitation_probability ? h.precipitation_probability[k] : null;
+        cells += '<div class="mh">'+
+          '<div class="t">'+fmtHour(d)+'</div>'+
+          '<div class="i">'+code[1]+'</div>'+
+          '<div class="tm">'+round(h.temperature_2m[k])+'°</div>'+
+          '<div class="pp">'+(pp!=null&&pp>0?"💧"+pp+"%":"")+'</div>'+
+        '</div>';
+      }
+      if(!cells) return "";
+      return '<div class="m-section"><h4>Hourly</h4><div class="m-hourly">'+cells+'</div></div>';
     }
 
     function alertIcon(sev){
