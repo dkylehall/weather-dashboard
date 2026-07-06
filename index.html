@@ -285,11 +285,14 @@
   /* Radar */
   .radar-head {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 16px 8px; flex: 0 0 auto;
+    padding: 12px 16px 8px; flex: 0 0 auto; flex-wrap: wrap; gap: 8px 10px;
   }
   .radar-head h2 { margin: 0; }
-  .radar-head-right { display: flex; align-items: center; gap: 12px; }
+  .radar-head-left { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .radar-time { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .radar-head-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .map-style-btn { padding: 4px 9px; font-size: 12px; }
+  #radar-play { min-width: 32px; text-align: center; }
   #map { flex: 1 1 auto; width: 100%; min-height: 0; background: #0a0e1c; }
   .leaflet-container { background: #0a0e1c; }
   .radar-legend { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
@@ -531,9 +534,14 @@
       <aside id="side">
         <section class="card" id="radar-card">
           <div class="radar-head">
-            <h2>Live Radar</h2>
+            <div class="radar-head-left">
+              <h2>Live Radar</h2>
+              <span class="radar-time" id="radar-time"></span>
+            </div>
             <div class="radar-head-right">
-              <button class="tool map-style-btn" id="map-style" title="Toggle map style">☀️ Light</button>
+              <button class="tool map-style-btn" id="radar-play" title="Play / pause radar">⏸</button>
+              <button class="tool map-style-btn" id="map-type" title="Road / satellite">🛰️ Satellite</button>
+              <button class="tool map-style-btn" id="map-style" title="Light / dark">☀️ Light</button>
               <div class="radar-legend"><span>Light</span><span class="bar"></span><span>Heavy</span></div>
             </div>
           </div>
@@ -578,16 +586,24 @@
       gps: null,                  // {lat,lon,name,region} device location, always pinned on top
       refreshTimer: null
     };
-    var map = null, radarLayer = null, marker = null, baseLayer = null;
-    var MAP_STYLE_KEY = "wx_map_style";
+    var map = null, marker = null, baseLayer = null;
+    var MAP_STYLE_KEY = "wx_map_style";   // road theme: light | dark
+    var MAP_TYPE_KEY  = "wx_map_type";    // base type: road | satellite
     var BASE_TILES = {
       dark:  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+      light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
     };
     var mapStyle = (function(){
       try { return localStorage.getItem(MAP_STYLE_KEY) === "light" ? "light" : "dark"; }
       catch(e){ return "dark"; }
     })();
+    var mapType = (function(){
+      try { return localStorage.getItem(MAP_TYPE_KEY) === "satellite" ? "satellite" : "road"; }
+      catch(e){ return "road"; }
+    })();
+    // Animated radar: one tile layer per RainViewer frame, opacity-toggled on a timer.
+    var radarFrames = [], radarIdx = 0, radarTimer = null, radarPlaying = true;
     // Cap zoom so base tiles stay sharp; radar upscales beyond its native zoom (below).
     var MAP_MAX_ZOOM = 18;
     // RainViewer only serves real radar tiles through z7; past that it returns a
@@ -892,24 +908,47 @@
     }
 
     // ---------- Radar ----------
-    function setBaseLayer(style){
+    function applyBaseLayer(){
       if(!map) return;
-      mapStyle = (style === "light") ? "light" : "dark";
       if(baseLayer) map.removeLayer(baseLayer);
-      baseLayer = L.tileLayer(BASE_TILES[mapStyle], {
-        maxZoom: MAP_MAX_ZOOM, maxNativeZoom: MAP_MAX_ZOOM, subdomains: "abcd"
-      }).addTo(map);
-      baseLayer.bringToBack();           // keep radar overlay on top
-      $("map").style.background = (mapStyle === "light") ? "#e6e9ef" : "#0a0e1c";
-      var btn = $("map-style");
-      if(btn) btn.textContent = (mapStyle === "light") ? "🌙 Dark" : "☀️ Light";
+      if(mapType === "satellite"){
+        baseLayer = L.tileLayer(BASE_TILES.satellite, { maxZoom: MAP_MAX_ZOOM, maxNativeZoom: 18 });
+        $("map").style.background = "#0a0e1c";
+      } else {
+        baseLayer = L.tileLayer(BASE_TILES[mapStyle], {
+          maxZoom: MAP_MAX_ZOOM, maxNativeZoom: MAP_MAX_ZOOM, subdomains: "abcd"
+        });
+        $("map").style.background = (mapStyle === "light") ? "#e6e9ef" : "#0a0e1c";
+      }
+      baseLayer.addTo(map);
+      baseLayer.bringToBack();           // keep the radar frames on top
+      updateMapButtons();
+    }
+    function updateMapButtons(){
+      var t = $("map-type");
+      if(t) t.textContent = (mapType === "satellite") ? "🗺️ Road" : "🛰️ Satellite";
+      var s = $("map-style");
+      if(s){
+        s.textContent = (mapStyle === "light") ? "🌙 Dark" : "☀️ Light";
+        s.style.display = (mapType === "satellite") ? "none" : "";  // theme only applies to road
+      }
+    }
+    function setMapTheme(theme){
+      mapStyle = (theme === "light") ? "light" : "dark";
       try { localStorage.setItem(MAP_STYLE_KEY, mapStyle); } catch(e){}
+      applyBaseLayer();
+    }
+    function setMapType(type){
+      mapType = (type === "satellite") ? "satellite" : "road";
+      try { localStorage.setItem(MAP_TYPE_KEY, mapType); } catch(e){}
+      applyBaseLayer();
     }
 
     function initOrMoveMap(){
       if(!map){
-        map=L.map("map",{zoomControl:true,attributionControl:false,maxZoom:MAP_MAX_ZOOM}).setView([state.lat,state.lon],7);
-        setBaseLayer(mapStyle);
+        map=L.map("map",{zoomControl:true,attributionControl:false,maxZoom:MAP_MAX_ZOOM,
+          scrollWheelZoom:true,touchZoom:true,doubleClickZoom:true,dragging:true}).setView([state.lat,state.lon],7);
+        applyBaseLayer();
         marker=L.circleMarker([state.lat,state.lon],{radius:6,color:"#5cc8ff",fillColor:"#5cc8ff",fillOpacity:0.9,weight:2}).addTo(map);
         setTimeout(function(){ map.invalidateSize(); },200);
         window.addEventListener("resize",function(){ if(map) map.invalidateSize(); });
@@ -920,21 +959,59 @@
       }
       loadRadar();
     }
+    function clearRadar(){
+      if(radarTimer){ clearTimeout(radarTimer); radarTimer = null; }
+      radarFrames.forEach(function(f){ if(f.layer && map) map.removeLayer(f.layer); });
+      radarFrames = [];
+    }
     function loadRadar(){
       fetch("https://api.rainviewer.com/public/weather-maps.json")
-        .then(function(r){return r.json();})
+        .then(function(r){ return r.json(); })
         .then(function(j){
           if(!map) return;
-          var frames=(j.radar&&j.radar.past)?j.radar.past.slice():[];
-          if(j.radar&&j.radar.nowcast) frames=frames.concat(j.radar.nowcast);
+          var host = j.host || "https://tilecache.rainviewer.com";
+          var frames = (j.radar && j.radar.past) ? j.radar.past.slice() : [];
+          if(j.radar && j.radar.nowcast) frames = frames.concat(j.radar.nowcast);
           if(!frames.length) return;
-          var latest=frames[frames.length-1];
-          var host=j.host||"https://tilecache.rainviewer.com";
-          var url=host+latest.path+"/256/{z}/{x}/{y}/4/1_1.png";
-          if(radarLayer) map.removeLayer(radarLayer);
-          // Upscale past z7 instead of fetching RainViewer's "not supported" placeholder.
-          radarLayer=L.tileLayer(url,{opacity:0.6,maxZoom:MAP_MAX_ZOOM,maxNativeZoom:RADAR_NATIVE_MAX,errorTileUrl:BLANK_TILE}).addTo(map);
+          clearRadar();
+          frames.forEach(function(fr){
+            var url = host + fr.path + "/256/{z}/{x}/{y}/4/1_1.png";
+            // Upscale past z7 instead of fetching RainViewer's "not supported" placeholder.
+            var layer = L.tileLayer(url, { opacity: 0, maxZoom: MAP_MAX_ZOOM, maxNativeZoom: RADAR_NATIVE_MAX, errorTileUrl: BLANK_TILE });
+            layer.addTo(map);
+            radarFrames.push({ time: fr.time, layer: layer });
+          });
+          radarIdx = radarPlaying ? 0 : radarFrames.length - 1;
+          showRadarFrame(radarIdx);
+          if(radarPlaying) startRadarAnim();
         }).catch(function(){});
+    }
+    function showRadarFrame(i){
+      radarIdx = i;
+      radarFrames.forEach(function(f, idx){ f.layer.setOpacity(idx === i ? 0.6 : 0); });
+      var el = $("radar-time");
+      if(el && radarFrames[i]){
+        var ms = radarFrames[i].time * 1000;
+        var s = new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+        el.textContent = (ms > Date.now()) ? ("forecast " + s) : s;
+      }
+    }
+    function startRadarAnim(){
+      if(radarTimer) clearTimeout(radarTimer);
+      (function tick(){
+        var atEnd = (radarIdx === radarFrames.length - 1);   // linger on the newest frame
+        radarTimer = setTimeout(function(){
+          showRadarFrame((radarIdx + 1) % radarFrames.length);
+          tick();
+        }, atEnd ? 1200 : 500);
+      })();
+    }
+    function stopRadarAnim(){ if(radarTimer){ clearTimeout(radarTimer); radarTimer = null; } }
+    function toggleRadarPlay(){
+      radarPlaying = !radarPlaying;
+      var b = $("radar-play");
+      if(b) b.textContent = radarPlaying ? "⏸" : "▶";
+      if(radarPlaying) startRadarAnim(); else stopRadarAnim();
     }
 
     // ---------- Weather alerts (US National Weather Service) ----------
@@ -1174,7 +1251,9 @@
 
     // ---------- Controls ----------
     $("refresh").addEventListener("click",function(){ fetchWeather(); loadRadar(); loadAlerts(); });
-    $("map-style").addEventListener("click",function(){ setBaseLayer(mapStyle==="dark"?"light":"dark"); });
+    $("map-style").addEventListener("click",function(){ setMapTheme(mapStyle==="dark"?"light":"dark"); });
+    $("map-type").addEventListener("click",function(){ setMapType(mapType==="road"?"satellite":"road"); });
+    $("radar-play").addEventListener("click",toggleRadarPlay);
     $("fullscreen").addEventListener("click",function(){
       if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
       else document.exitFullscreen();
